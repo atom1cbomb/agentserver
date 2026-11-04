@@ -7,6 +7,7 @@
 package envmcp
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -81,6 +82,33 @@ type RunArgs struct {
 	LoomTokenEnv           string
 }
 
+// inheritedEnv reads a variable from the parent process when the current
+// process environment does not contain it. Codex app-server deliberately
+// builds the MCP child's environment from the MCP config `env` table, so
+// sensitive runtime credentials on the app-server itself are otherwise lost
+// when env-mcp is spawned. The parent is the app-server process and is owned
+// by the same gateway container/user. This keeps the credential out of the
+// persisted CODEX_HOME config.toml and skill files.
+func inheritedEnv(name string) string {
+	if name == "" {
+		return ""
+	}
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", os.Getppid()))
+	if err != nil {
+		return ""
+	}
+	prefix := []byte(name + "=")
+	for _, entry := range bytes.Split(data, []byte{0}) {
+		if bytes.HasPrefix(entry, prefix) {
+			return string(entry[len(prefix):])
+		}
+	}
+	return ""
+}
+
 // Run constructs the bridge.Pool, builds the tool registry, and serves
 // the MCP loop on stdin/stdout until EOF or context cancellation.
 //
@@ -105,6 +133,7 @@ func Run(ctx context.Context, args RunArgs, stdin io.Reader, stdout, stderr io.W
 	if args.ExecGatewayInternalSecret != "" {
 		execGwSecret = os.Getenv(args.ExecGatewayInternalSecret)
 	}
+	loomToken := inheritedEnv(args.LoomTokenEnv)
 
 	logger.Info("env-mcp starting",
 		"workspace_id", args.WorkspaceID,
@@ -153,8 +182,10 @@ func Run(ctx context.Context, args RunArgs, stdin io.Reader, stdout, stderr io.W
 	schedTransport := scheduling.NewHTTPTransport(args.AgentserverInternalURL, args.WorkspaceID, wsToken, nil)
 	toolList = append(toolList, scheduling.NewSchedulingTools(schedTransport)...)
 	if args.LoomObserverURL != "" {
-		token := os.Getenv(args.LoomTokenEnv)
-		toolList = append(toolList, loomtools.NewTools(loomtools.NewClient(args.LoomObserverURL, args.LoomAuthority, args.LoomWorkspace, token))...)
+		if loomToken == "" {
+			logger.Warn("loom token is unavailable to env-mcp", "token_env", args.LoomTokenEnv)
+		}
+		toolList = append(toolList, loomtools.NewTools(loomtools.NewClient(args.LoomObserverURL, args.LoomAuthority, args.LoomWorkspace, loomToken))...)
 		logger.Info("loom MCP tools enabled", "observer", args.LoomObserverURL, "workspace", args.LoomWorkspace)
 	}
 	srv := NewMCPServer("agentserver", toolList, logger)

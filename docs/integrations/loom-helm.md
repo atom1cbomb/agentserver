@@ -62,8 +62,11 @@ The chart injects the following only when `loom.enabled` is true:
 * `CXG_LOOM_WORKSPACE`
 * `CXG_LOOM_TOKEN` (from Secret key `grip-token`)
 
-The token is passed through the gateway process environment to `env-mcp`; it is
-not written to per-thread `config.toml` or exposed as an MCP argument.
+The token is passed through the gateway process environment. Because Codex
+constructs the MCP child's environment from its configured `env` table,
+`env-mcp` falls back to reading the token from its parent Codex process
+environment at runtime. It is not written to per-thread `config.toml` or
+exposed as an MCP argument.
 
 ## 4. Verify
 
