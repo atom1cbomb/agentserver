@@ -360,13 +360,22 @@ codexAppGateway:
     bucket: ""
     pathStyle: false
     existingSecret: ""            # k8s secret with keys: access_key_id, secret_access_key
-  # Optional Loom public GRIP bridge. The token is mounted only into the
-  # per-turn MCP child and is never exposed as a tool argument.
+  # Optional Loom GRIP bridge for the Codex app-server's env-mcp child.
+  # The bridge and the personal-computing-space skill are enabled by the
+  # same codex-app-gateway image used by Docker deployments. Helm only
+  # supplies runtime connection settings; it never stores the token in
+  # values, ConfigMaps, config.toml, or skill files.
+  #
+  # When enabled, create a Secret containing:
+  #   stringData:
+  #     grip-token: <Loom GRIP token>
+  # and set existingSecret to that Secret's name.
   loom:
-    observerURL: ""
+    enabled: false
+    observerURL: ""                 # e.g. http://loom-observer:8080
     authority: loom.local
     workspace: workspace-default
-    existingSecret: ""             # k8s secret with key: grip-token
+    existingSecret: ""               # k8s Secret with key: grip-token
   resources: {}
 
 # codex-exec-gateway: pairs inbound /codex-exec/{exe_id} executor connections

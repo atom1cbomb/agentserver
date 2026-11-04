@@ -18,3 +18,5 @@ web/src/lib/api-generated/
 
 # Brainstorming companion scratch dir (HTML mockups served to local browser).
 .superpowers/
+.env.loom
+.env.local

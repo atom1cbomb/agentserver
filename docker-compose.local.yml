@@ -1,0 +1,108 @@
+services:
+  postgres:
+    ports: !override
+      - "15432:5432"
+  server:
+    env_file:
+      - .env.loom
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports: !override
+      - "18080:8080"
+    environment:
+      CXG_IMBRIDGE_BASE_URL: "http://imbridge:8083"
+      IMBRIDGE_URL: "http://imbridge:8083"
+      INTERNAL_API_SECRET: "${INTERNAL_API_SECRET}"
+      LLMPROXY_URL: "http://llmproxy:8081"
+      CODEX_APP_GATEWAY_REST_URL: "http://codex-app-gateway:8086"
+      CODEX_EXEC_GATEWAY_INTERNAL_URL: "http://codex-exec-gateway:6060"
+  llmproxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.llmproxy
+    ports:
+      - "18081:8081"
+  credentialproxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.credentialproxy
+    ports:
+      - "18083:8083"
+  executor-registry:
+    ports:
+      - "18084:8084"
+  cc-broker:
+    ports:
+      - "18085:8085"
+  minio:
+    image: quay.io/minio/minio:latest
+    ports: !override
+      - "19000:9000"
+      - "19001:9001"
+  minio-init:
+    image: quay.io/minio/mc:latest
+  imbridge:
+    build:
+      context: .
+      dockerfile: Dockerfile.imbridge
+    environment:
+      DATABASE_URL: "postgres://agentserver:agentserver@postgres:5432/agentserver?sslmode=disable"
+      IMBRIDGE_LISTEN_ADDR: ":8083"
+      AGENTSERVER_URL: "http://server:8080"
+      INTERNAL_API_SECRET: "${INTERNAL_API_SECRET}"
+    expose:
+      - "8083"
+    depends_on:
+      - postgres
+  codex-exec-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.codex-exec-gateway
+    environment:
+      CXG_PORT: "6060"
+      CXG_DATABASE_URL: "postgres://agentserver:agentserver@postgres:5432/agentserver?sslmode=disable"
+      CXG_CAPTOKEN_HMAC_SECRET: "${INTERNAL_API_SECRET}"
+      CXG_INTERNAL_SHARED_SECRET: "${INTERNAL_API_SECRET}"
+      CXG_AGENTSERVER_INTERNAL_SECRET: "${INTERNAL_API_SECRET}"
+      CXG_AGENTSERVER_INTERNAL_URL: "http://server:8080"
+    ports:
+      - "16060:6060"
+    depends_on:
+      - postgres
+      - server
+  codex-app-gateway:
+    env_file:
+      - .env.loom
+    command: ["serve"]
+    build:
+      context: .
+      dockerfile: Dockerfile.codex-app-gateway
+    environment:
+      CXG_LISTEN_ADDR: ":8086"
+      CXG_CODEX_BIN: "/usr/local/bin/codex"
+      CXG_S3_ENDPOINT: "http://minio:9000"
+      CXG_S3_REGION: "us-east-1"
+      CXG_S3_BUCKET: "ccbroker"
+      CXG_S3_PATH_STYLE: "true"
+      CXG_S3_ACCESS_KEY_ID: "minioadmin"
+      CXG_S3_SECRET_ACCESS_KEY: "minioadmin"
+      CXG_EXEC_GATEWAY_URL: "ws://codex-exec-gateway:6060"
+      CXG_EXEC_GATEWAY_INTERNAL_URL: "http://codex-exec-gateway:6060"
+      CXG_EXEC_GATEWAY_INTERNAL_SECRET: "${INTERNAL_API_SECRET}"
+      CXG_CAPTOKEN_HMAC_SECRET: "${INTERNAL_API_SECRET}"
+      CXG_AGENTSERVER_INTERNAL_URL: "http://server:8080"
+      CXG_AGENTSERVER_INTERNAL_SECRET: "${INTERNAL_API_SECRET}"
+      CXG_CODEX_API_KEY: "${OPENAI_API_KEY}"
+      CXG_MODEL: "${CXG_MODEL}"
+      CXG_MODEL_PROVIDER: "${CXG_MODEL_PROVIDER}"
+      CXG_MODEL_PROVIDER_BASE_URL: "${CXG_MODEL_PROVIDER_BASE_URL}"
+      CXG_MODEL_PROVIDER_ENV_KEY: "${CXG_MODEL_PROVIDER_ENV_KEY}"
+      CXG_MODEL_PROVIDER_WIRE_API: "${CXG_MODEL_PROVIDER_WIRE_API}"
+      CXG_IMBRIDGE_BASE_URL: "http://imbridge:8083"
+    ports:
+      - "18086:8086"
+    depends_on:
+      - minio
+      - codex-exec-gateway
+      - server

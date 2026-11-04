@@ -4,7 +4,7 @@
 {{- $_ := required "codexAppGateway.s3.bucket is required when codexAppGateway.enabled is true" .Values.codexAppGateway.s3.bucket }}
 {{- $_ := required "codexAppGateway.codexApiKey is required when codexAppGateway.enabled is true (LLM provider API key forwarded to spawned codex)" .Values.codexAppGateway.codexApiKey }}
 {{- $_ := required "internal.apiSecret is required when codexAppGateway.enabled is true" .Values.internal.apiSecret }}
-{{- if .Values.codexAppGateway.loom.observerURL }}{{- $_ := required "codexAppGateway.loom.existingSecret is required when Loom bridge is enabled (k8s secret with key: grip-token)" .Values.codexAppGateway.loom.existingSecret }}{{- end }}
+{{- if .Values.codexAppGateway.loom.enabled }}{{- $_ := required "codexAppGateway.loom.observerURL is required when Loom bridge is enabled" .Values.codexAppGateway.loom.observerURL }}{{- $_ := required "codexAppGateway.loom.existingSecret is required when Loom bridge is enabled (k8s secret with key: grip-token)" .Values.codexAppGateway.loom.existingSecret }}{{- end }}
 {{- /*
 Default model-provider base URL points at the in-cluster llmproxy unless
 explicitly overridden. Pre-resolved here so the env block stays tidy.
@@ -138,7 +138,7 @@ spec:
               value: {{ printf "http://%s-imbridge.%s.svc:%v" .Release.Name .Release.Namespace (int .Values.imbridge.port) | quote }}
             - name: CXG_IMBRIDGE_SECRET
               value: {{ required "internal.apiSecret is required when codexAppGateway.enabled is true" .Values.internal.apiSecret | quote }}
-            {{- if .Values.codexAppGateway.loom.observerURL }}
+            {{- if .Values.codexAppGateway.loom.enabled }}
             - name: CXG_LOOM_OBSERVER_URL
               value: {{ .Values.codexAppGateway.loom.observerURL | quote }}
             - name: CXG_LOOM_AUTHORITY
