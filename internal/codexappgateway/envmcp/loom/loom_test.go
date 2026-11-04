@@ -46,3 +46,49 @@ func TestNewToolsSurface(t *testing.T) {
 		}
 	}
 }
+
+func TestDescribeResolvesActionSchemas(t *testing.T) {
+	const inputRef = "grip://loom.local/workspaces/workspace-default/content/input"
+	const outputRef = "grip://loom.local/workspaces/workspace-default/content/output"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		method, _ := req["method"].(string)
+		target, _ := req["target"].(string)
+		if method == "DESCRIBE" && target == "grip://loom.local/workspaces/workspace-default/actions/run" {
+			json.NewEncoder(w).Encode(map[string]any{"kind": "reply", "body": map[string]any{
+				"resource": map[string]any{"metadata": map[string]any{
+					"arguments_schema": map[string]any{"resource_id": inputRef},
+					"result_schema":    map[string]any{"resource_id": outputRef},
+				}},
+			}})
+			return
+		}
+		if method == "INVOKE" && target == inputRef {
+			json.NewEncoder(w).Encode(map[string]any{"kind": "reply", "body": map[string]any{"content": map[string]any{"required": []string{"ProjectId", "ImageId"}}}})
+			return
+		}
+		if method == "INVOKE" && target == outputRef {
+			json.NewEncoder(w).Encode(map[string]any{"kind": "reply", "body": map[string]any{"content": map[string]any{"required": []string{"Instances"}}}})
+			return
+		}
+		t.Fatalf("unexpected GRIP request: %v", req)
+	}))
+	defer ts.Close()
+	result, err := (&describeTool{c: NewClient(ts.URL, "loom.local", "workspace-default", "token")}).Call(context.Background(), json.RawMessage(`{"target":"grip://loom.local/workspaces/workspace-default/actions/run"}`))
+	if err != nil || result.IsError {
+		t.Fatalf("describe failed: %v %+v", err, result)
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &body); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := body["resolved_input_schema"]; !ok {
+		t.Fatalf("resolved input schema missing: %s", result.Content[0].Text)
+	}
+	if _, ok := body["resolved_output_schema"]; !ok {
+		t.Fatalf("resolved output schema missing: %s", result.Content[0].Text)
+	}
+}

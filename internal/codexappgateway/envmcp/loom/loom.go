@@ -137,7 +137,48 @@ func (t *describeTool) Call(ctx context.Context, args json.RawMessage) (tools.MC
 	if err != nil {
 		return errorResult(err), nil
 	}
+	// Action DESCRIBE responses carry content-digest references for the
+	// argument and result schemas. Resolve those references here so an agent
+	// does not mistake a schema URI for the schema itself and omit required
+	// fields. The original GRIP description remains intact.
+	resolveDescriptionSchemas(ctx, t.c, out)
 	return jsonResult(out), nil
+}
+
+func resolveDescriptionSchemas(ctx context.Context, c *Client, description map[string]any) {
+	resource, _ := description["resource"].(map[string]any)
+	metadata, _ := resource["metadata"].(map[string]any)
+	for _, item := range []struct {
+		refKey string
+		outKey string
+	}{
+		{refKey: "arguments_schema", outKey: "resolved_input_schema"},
+		{refKey: "result_schema", outKey: "resolved_output_schema"},
+	} {
+		ref, _ := metadata[item.refKey].(map[string]any)
+		contentURI, _ := ref["resource_id"].(string)
+		if contentURI == "" {
+			continue
+		}
+		content, err := c.readContent(ctx, contentURI)
+		if err != nil {
+			description[item.outKey+"_error"] = err.Error()
+			continue
+		}
+		description[item.outKey] = content
+	}
+}
+
+func (c *Client) readContent(ctx context.Context, contentURI string) (any, error) {
+	out, err := c.call(ctx, "INVOKE", contentURI, c.targetRoot()+"/actions/read/v1", map[string]any{})
+	if err != nil {
+		return nil, err
+	}
+	content, ok := out["content"]
+	if !ok {
+		return nil, fmt.Errorf("Loom content response has no content")
+	}
+	return content, nil
 }
 
 type invokeTool struct{ c *Client }

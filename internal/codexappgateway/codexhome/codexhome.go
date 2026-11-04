@@ -68,6 +68,7 @@ type ConfigInput struct {
 }
 
 // Manager creates per-thread CODEX_HOME tmpdirs under root.
+//
 //go:embed skills/personal-computing-space/**
 var loomSkillFS embed.FS
 
@@ -93,11 +94,10 @@ func (m *Manager) NewTmpDir(workspaceID string) (string, error) {
 	return d, nil
 }
 
-
 // InstallLoomSkill installs the embedded, read-only AgentServer-adapted Loom
 // skill into the Codex-compatible global skill root for this CODEX_HOME.
 func (m *Manager) InstallLoomSkill(codexHome string) error {
-	root := filepath.Join(codexHome, ".agents", "skills")
+	root := filepath.Join(codexHome, ".agents", "skills", "personal-computing-space")
 	return fsCopy(loomSkillFS, "skills/personal-computing-space", root)
 }
 
