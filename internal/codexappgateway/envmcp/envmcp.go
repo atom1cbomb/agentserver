@@ -14,6 +14,7 @@ import (
 	"os"
 	"strings"
 
+	loomtools "github.com/agentserver/agentserver/internal/codexappgateway/envmcp/loom"
 	"github.com/agentserver/agentserver/internal/codexappgateway/envmcp/scheduling"
 	"github.com/agentserver/agentserver/internal/envtools/bridge"
 	"github.com/agentserver/agentserver/internal/envtools/nameresolver"
@@ -74,6 +75,10 @@ type RunArgs struct {
 	// <base>/api/internal/workspaces/<wid>/scheduled-tasks/... with the
 	// workspace cap-token as Authorization: Bearer.
 	AgentserverInternalURL string // --agentserver-internal-url
+	LoomObserverURL        string
+	LoomAuthority          string
+	LoomWorkspace          string
+	LoomTokenEnv           string
 }
 
 // Run constructs the bridge.Pool, builds the tool registry, and serves
@@ -147,6 +152,11 @@ func Run(ctx context.Context, args RunArgs, stdin io.Reader, stdout, stderr io.W
 	// directly — no intermediary.
 	schedTransport := scheduling.NewHTTPTransport(args.AgentserverInternalURL, args.WorkspaceID, wsToken, nil)
 	toolList = append(toolList, scheduling.NewSchedulingTools(schedTransport)...)
+	if args.LoomObserverURL != "" {
+		token := os.Getenv(args.LoomTokenEnv)
+		toolList = append(toolList, loomtools.NewTools(loomtools.NewClient(args.LoomObserverURL, args.LoomAuthority, args.LoomWorkspace, token))...)
+		logger.Info("loom MCP tools enabled", "observer", args.LoomObserverURL, "workspace", args.LoomWorkspace)
+	}
 	srv := NewMCPServer("agentserver", toolList, logger)
 	if err := srv.Serve(ctx, stdin, stdout); err != nil {
 		return fmt.Errorf("mcp serve: %w", err)

@@ -135,6 +135,10 @@ func parseEnvMcpArgs(rawArgs []string) (envmcp.RunArgs, error) {
 	execGatewayInternalURL := fs.String("exec-gateway-internal-url", "", "http base URL for codex-exec-gateway internal API (required: list_environments + copy_path HTTPS relay)")
 	execGatewayInternalSecretEnv := fs.String("exec-gateway-internal-secret-env", "", "env var name holding the exec-gateway internal shared secret (optional)")
 	agentserverInternalURL := fs.String("agentserver-internal-url", "", "http base URL for agentserver-main internal API (required: scheduling tools)")
+	loomObserverURL := fs.String("loom-observer-url", "", "Loom Observer public URL (optional)")
+	loomAuthority := fs.String("loom-authority", "loom.local", "Loom GRIP authority")
+	loomWorkspace := fs.String("loom-workspace", "workspace-default", "Loom workspace")
+	loomTokenEnv := fs.String("loom-token-env", "", "env var holding the Loom GRIP token")
 	logFile := fs.String("log-file", "", "if set, the env-mcp logger writes to this file (append) in addition to stderr — codex hides MCP-child stderr, so this is the only ops-visible log")
 	if err := fs.Parse(rawArgs); err != nil {
 		return envmcp.RunArgs{}, err
@@ -160,6 +164,10 @@ func parseEnvMcpArgs(rawArgs []string) (envmcp.RunArgs, error) {
 		ExecGatewayInternalURL:    *execGatewayInternalURL,
 		ExecGatewayInternalSecret: *execGatewayInternalSecretEnv,
 		AgentserverInternalURL:    *agentserverInternalURL,
+		LoomObserverURL:           *loomObserverURL,
+		LoomAuthority:             *loomAuthority,
+		LoomWorkspace:             *loomWorkspace,
+		LoomTokenEnv:              *loomTokenEnv,
 		LogFile:                   *logFile,
 	}, nil
 }

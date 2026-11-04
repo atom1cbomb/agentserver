@@ -4,6 +4,7 @@
 {{- $_ := required "codexAppGateway.s3.bucket is required when codexAppGateway.enabled is true" .Values.codexAppGateway.s3.bucket }}
 {{- $_ := required "codexAppGateway.codexApiKey is required when codexAppGateway.enabled is true (LLM provider API key forwarded to spawned codex)" .Values.codexAppGateway.codexApiKey }}
 {{- $_ := required "internal.apiSecret is required when codexAppGateway.enabled is true" .Values.internal.apiSecret }}
+{{- if .Values.codexAppGateway.loom.observerURL }}{{- $_ := required "codexAppGateway.loom.existingSecret is required when Loom bridge is enabled (k8s secret with key: grip-token)" .Values.codexAppGateway.loom.existingSecret }}{{- end }}
 {{- /*
 Default model-provider base URL points at the in-cluster llmproxy unless
 explicitly overridden. Pre-resolved here so the env block stays tidy.
@@ -137,6 +138,19 @@ spec:
               value: {{ printf "http://%s-imbridge.%s.svc:%v" .Release.Name .Release.Namespace (int .Values.imbridge.port) | quote }}
             - name: CXG_IMBRIDGE_SECRET
               value: {{ required "internal.apiSecret is required when codexAppGateway.enabled is true" .Values.internal.apiSecret | quote }}
+            {{- if .Values.codexAppGateway.loom.observerURL }}
+            - name: CXG_LOOM_OBSERVER_URL
+              value: {{ .Values.codexAppGateway.loom.observerURL | quote }}
+            - name: CXG_LOOM_AUTHORITY
+              value: {{ .Values.codexAppGateway.loom.authority | quote }}
+            - name: CXG_LOOM_WORKSPACE
+              value: {{ .Values.codexAppGateway.loom.workspace | quote }}
+            - name: CXG_LOOM_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.codexAppGateway.loom.existingSecret }}
+                  key: grip-token
+            {{- end }}
           # CODEX_HOME tmpdirs (sqlite + session jsonl) live here. emptyDir
           # is sufficient because state is round-tripped to S3 on idle
           # shutdown — pod restart loses no data.

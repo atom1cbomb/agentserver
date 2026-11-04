@@ -360,6 +360,13 @@ codexAppGateway:
     bucket: ""
     pathStyle: false
     existingSecret: ""            # k8s secret with keys: access_key_id, secret_access_key
+  # Optional Loom public GRIP bridge. The token is mounted only into the
+  # per-turn MCP child and is never exposed as a tool argument.
+  loom:
+    observerURL: ""
+    authority: loom.local
+    workspace: workspace-default
+    existingSecret: ""             # k8s secret with key: grip-token
   resources: {}
 
 # codex-exec-gateway: pairs inbound /codex-exec/{exe_id} executor connections

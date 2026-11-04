@@ -46,6 +46,10 @@ type AgentServerMCP struct {
 	// <base>/api/internal/workspaces/<wid>/scheduled-tasks/... with
 	// the workspace cap-token.
 	AgentserverInternalURL string
+	LoomObserverURL        string
+	LoomAuthority          string
+	LoomWorkspace          string
+	LoomToken              string
 	// LogFile, when non-empty, adds `--log-file <path>` to the env-mcp
 	// args. WriteConfig auto-injects this with `<codexHome>/env-mcp.log`
 	// when the caller leaves it empty, so callers normally don't set it.
@@ -163,6 +167,9 @@ func RenderConfigTOML(cfg ConfigInput) (string, error) {
 			"--agentserver-internal-url", m.AgentserverInternalURL,
 			"--workspace-token-env", "CXG_WORKSPACE_TOKEN",
 		}
+		if m.LoomObserverURL != "" {
+			args = append(args, "--loom-observer-url", m.LoomObserverURL, "--loom-authority", m.LoomAuthority, "--loom-workspace", m.LoomWorkspace, "--loom-token-env", "CXG_LOOM_TOKEN")
+		}
 		httpRelayEnabled := m.ExecGatewayInternalSecret != ""
 		if httpRelayEnabled {
 			args = append(args,
@@ -181,6 +188,9 @@ func RenderConfigTOML(cfg ConfigInput) (string, error) {
 		}
 		b.WriteString("]\n")
 		fmt.Fprintf(&b, "env = { CXG_WORKSPACE_TOKEN = %q", m.WorkspaceToken)
+		if m.LoomObserverURL != "" {
+			fmt.Fprintf(&b, ", CXG_LOOM_TOKEN = %q", m.LoomToken)
+		}
 		if httpRelayEnabled {
 			fmt.Fprintf(&b, ", CXG_EXEC_GATEWAY_INTERNAL_SECRET = %q",
 				m.ExecGatewayInternalSecret)

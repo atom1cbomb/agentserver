@@ -12,14 +12,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentserver/agentserver/internal/captoken"
+	"github.com/agentserver/agentserver/internal/clientmeta"
 	"github.com/agentserver/agentserver/internal/codexappgateway/approvalfilter"
 	"github.com/agentserver/agentserver/internal/codexappgateway/auth"
 	"github.com/agentserver/agentserver/internal/codexappgateway/broker"
 	"github.com/agentserver/agentserver/internal/codexappgateway/codexhome"
 	"github.com/agentserver/agentserver/internal/codexappgateway/scheduler"
 	"github.com/agentserver/agentserver/internal/codexappgateway/supervisor"
-	"github.com/agentserver/agentserver/internal/captoken"
-	"github.com/agentserver/agentserver/internal/clientmeta"
 	"github.com/agentserver/agentserver/internal/shortid"
 	"github.com/agentserver/agentserver/internal/wsbridge"
 
@@ -189,6 +189,10 @@ func makeBuildConfig(cfg ServeConfig, wsTokenClient workspaceTokenFetcher, selfB
 					ExecGatewayInternalURL:    cfg.ExecGatewayInternalURL,
 					ExecGatewayInternalSecret: cfg.ExecGatewayInternalSecret,
 					AgentserverInternalURL:    cfg.AgentserverInternalURL,
+					LoomObserverURL:           cfg.LoomObserverURL,
+					LoomAuthority:             cfg.LoomAuthority,
+					LoomWorkspace:             cfg.LoomWorkspace,
+					LoomToken:                 cfg.LoomToken,
 				},
 				ProjectTrustedPaths: trusted,
 			},
@@ -263,10 +267,10 @@ func (s *Server) Run(ctx context.Context, listenAddr string) error {
 //
 // Two paths serve the same handler for the inbound TUI ws upgrade:
 //   - "/"             — required by upstream codex's --remote URL parser,
-//                       which only accepts ws[s]://host:port and connects
-//                       to "/" (no path component).
+//     which only accepts ws[s]://host:port and connects
+//     to "/" (no path component).
 //   - "/codex-app/ws" — kept for direct in-cluster testing (curl, kubectl
-//                       port-forward) and path-based ingress setups.
+//     port-forward) and path-based ingress setups.
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) })
@@ -549,4 +553,3 @@ func parseInitializeClientInfo(frame []byte) (ua, version, osStr string, ok bool
 	}
 	return ua, v, "", true
 }
-

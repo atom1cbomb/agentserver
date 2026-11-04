@@ -81,11 +81,15 @@ type ServeConfig struct {
 	SchedulerConcurrency   int           // CXG_SCHED_CONCURRENCY   (default 4)
 	ImbridgeBaseURL        string        // CXG_IMBRIDGE_BASE_URL   (e.g. http://imbridgesvc:6090)
 	ImbridgeInternalSecret string        // CXG_IMBRIDGE_SECRET     (same value as imbridge's INTERNAL_API_SECRET)
+	LoomObserverURL        string
+	LoomAuthority          string
+	LoomWorkspace          string
+	LoomToken              string
 }
 
 func LoadServeConfigFromEnv() (ServeConfig, error) {
 	cfg := ServeConfig{
-		TmpRoot: envOr("CXG_TMP_ROOT", "/tmp/codex-app-gateway"),
+		TmpRoot:      envOr("CXG_TMP_ROOT", "/tmp/codex-app-gateway"),
 		IdleShutdown: 30 * time.Minute,
 		// CapTokenTTL bounds the cap-token's validity. The token is
 		// minted at codex app-server spawn and re-used by env-mcp for
@@ -213,6 +217,10 @@ func LoadServeConfigFromEnv() (ServeConfig, error) {
 	}
 	cfg.ImbridgeBaseURL = os.Getenv("CXG_IMBRIDGE_BASE_URL")
 	cfg.ImbridgeInternalSecret = os.Getenv("CXG_IMBRIDGE_SECRET")
+	cfg.LoomObserverURL = os.Getenv("CXG_LOOM_OBSERVER_URL")
+	cfg.LoomAuthority = envOr("CXG_LOOM_AUTHORITY", "loom.local")
+	cfg.LoomWorkspace = envOr("CXG_LOOM_WORKSPACE", "workspace-default")
+	cfg.LoomToken = os.Getenv("CXG_LOOM_TOKEN")
 	return cfg, nil
 }
 
