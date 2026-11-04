@@ -4,7 +4,9 @@
 package codexhome
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,6 +68,9 @@ type ConfigInput struct {
 }
 
 // Manager creates per-thread CODEX_HOME tmpdirs under root.
+//go:embed skills/personal-computing-space/**
+var loomSkillFS embed.FS
+
 type Manager struct{ root string }
 
 func NewManager(root string) *Manager { return &Manager{root: root} }
@@ -82,7 +87,48 @@ func (m *Manager) NewTmpDir(workspaceID string) (string, error) {
 	if err := os.Chmod(d, 0o700); err != nil {
 		return "", fmt.Errorf("chmod %s: %w", d, err)
 	}
+	if err := m.InstallLoomSkill(d); err != nil {
+		return "", err
+	}
 	return d, nil
+}
+
+
+// InstallLoomSkill installs the embedded, read-only AgentServer-adapted Loom
+// skill into the Codex-compatible global skill root for this CODEX_HOME.
+func (m *Manager) InstallLoomSkill(codexHome string) error {
+	root := filepath.Join(codexHome, ".agents", "skills")
+	return fsCopy(loomSkillFS, "skills/personal-computing-space", root)
+}
+
+func fsCopy(src embed.FS, source, dest string) error {
+	return fs.WalkDir(src, source, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		target := dest
+		if rel != "." {
+			target = filepath.Join(dest, rel)
+		}
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		b, err := src.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		// A resumed CODEX_HOME may already contain the read-only embedded
+		// skill. Make replacement idempotent before writing the new snapshot.
+		_ = os.Chmod(target, 0o644)
+		if err := os.WriteFile(target, b, 0o444); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 // RemoveTmpDir removes a previously-created tmpdir tree, but refuses
@@ -188,9 +234,6 @@ func RenderConfigTOML(cfg ConfigInput) (string, error) {
 		}
 		b.WriteString("]\n")
 		fmt.Fprintf(&b, "env = { CXG_WORKSPACE_TOKEN = %q", m.WorkspaceToken)
-		if m.LoomObserverURL != "" {
-			fmt.Fprintf(&b, ", CXG_LOOM_TOKEN = %q", m.LoomToken)
-		}
 		if httpRelayEnabled {
 			fmt.Fprintf(&b, ", CXG_EXEC_GATEWAY_INTERNAL_SECRET = %q",
 				m.ExecGatewayInternalSecret)

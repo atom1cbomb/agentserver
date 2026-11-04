@@ -152,20 +152,18 @@ func makeBuildConfig(cfg ServeConfig, wsTokenClient workspaceTokenFetcher, selfB
 			trusted = []string{"/tmp"}
 		}
 
-		// Per-spawn env: fetch a workspace-scoped proxy token (long
-		// lived, cached server-side). codex sends this as Bearer to
-		// llmproxy, which validates and swaps it for a fresh
-		// modelserver JWT per request — meaning OAuth refreshes
-		// server-side reach the running pod without a respawn.
+		// Keep the configured provider credential in the Codex subprocess.
+		// The workspace cap token is only for AgentServer internal APIs and
+		// must never replace the ModelServer/OpenAI API key.
 		var spawnEnv []string
-		if cfg.ModelProviderEnvKey != "" {
-			tok, err := wsTokenClient.GetOrCreate(ctx, workspaceID)
-			if err != nil {
-				logger.Warn("workspace-token: fetch failed; falling back to static CodexAPIKey",
-					"workspace_id", workspaceID, "err", err)
-			} else {
-				spawnEnv = append(spawnEnv, cfg.ModelProviderEnvKey+"="+tok)
-			}
+		if cfg.CodexAPIKey != "" && cfg.ModelProviderEnvKey != "" {
+			spawnEnv = append(spawnEnv, cfg.ModelProviderEnvKey+"="+cfg.CodexAPIKey)
+		}
+		// Loom credentials are inherited by the env-mcp child through the
+		// app-server process environment. They are deliberately not rendered
+		// into config.toml, which is persisted with CODEX_HOME state.
+		if cfg.LoomObserverURL != "" && cfg.LoomToken != "" {
+			spawnEnv = append(spawnEnv, "CXG_LOOM_TOKEN="+cfg.LoomToken)
 		}
 
 		return supervisor.SpawnConfig{

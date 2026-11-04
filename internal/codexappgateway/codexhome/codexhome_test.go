@@ -27,6 +27,14 @@ func TestManager_NewTmpDir_LayoutAndPermissions(t *testing.T) {
 	if st.Mode().Perm() != 0o700 {
 		t.Errorf("perm = %v", st.Mode().Perm())
 	}
+	skill := filepath.Join(d, ".agents", "skills", "personal-computing-space", "SKILL.md")
+	if _, err := os.Stat(skill); err != nil {
+		t.Fatalf("embedded Loom skill missing: %v", err)
+	}
+	data, err := os.ReadFile(skill)
+	if err != nil || !strings.Contains(string(data), "loom_inventory") {
+		t.Fatalf("embedded Loom skill is not AgentServer-adapted: %v", err)
+	}
 }
 
 func TestManager_RemoveTmpDir(t *testing.T) {
@@ -130,6 +138,33 @@ func TestRenderConfigTOML_LogFileEmitsFlag(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
+	}
+}
+
+func TestRenderConfigTOML_DoesNotPersistLoomToken(t *testing.T) {
+	cfg := ConfigInput{
+		ModelProvider: "modelserver",
+		Model:         "gpt-5.5",
+		AgentServer: AgentServerMCP{
+			CodexBin:        "/usr/local/bin/codex-app-gateway",
+			WorkspaceID:     "ws_a",
+			ExecGatewayURL:  "wss://exec-gw.example/bridge",
+			WorkspaceToken:  "wstok",
+			LoomObserverURL: "http://loom.example",
+			LoomAuthority:   "loom.local",
+			LoomWorkspace:   "workspace-default",
+			LoomToken:       "loom-secret-must-not-be-written",
+		},
+	}
+	out, err := RenderConfigTOML(cfg)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(out, "loom-secret-must-not-be-written") || strings.Contains(out, "CXG_LOOM_TOKEN =") {
+		t.Fatalf("Loom token persisted in config.toml:\n%s", out)
+	}
+	if !strings.Contains(out, `"--loom-token-env", "CXG_LOOM_TOKEN"`) {
+		t.Fatalf("missing Loom token env flag:\n%s", out)
 	}
 }
 
