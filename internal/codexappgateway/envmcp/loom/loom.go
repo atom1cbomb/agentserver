@@ -148,6 +148,33 @@ func (t *describeTool) Call(ctx context.Context, args json.RawMessage) (tools.MC
 func resolveDescriptionSchemas(ctx context.Context, c *Client, description map[string]any) {
 	resource, _ := description["resource"].(map[string]any)
 	metadata, _ := resource["metadata"].(map[string]any)
+	resolveActionSchemas(ctx, c, metadata)
+	// Some Loom descriptions expose actions directly under the resource
+	// metadata, while others expose them in a nested service_access object.
+	if serviceAccess, ok := metadata["service_access"].(map[string]any); ok {
+		resolveActionSchemas(ctx, c, serviceAccess)
+	}
+	// An exact action description stores its schema refs on metadata itself.
+	// Package and activation descriptions store action maps in metadata.actions;
+	// both forms must be resolved for the agent to see required fields.
+	resolveActionSchemas(ctx, c, resource)
+	resolveActionSchemas(ctx, c, description)
+}
+
+func resolveActionSchemas(ctx context.Context, c *Client, object map[string]any) {
+	if object == nil {
+		return
+	}
+	resolveOneActionSchemas(ctx, c, object)
+	actions, _ := object["actions"].([]any)
+	for _, value := range actions {
+		if action, ok := value.(map[string]any); ok {
+			resolveOneActionSchemas(ctx, c, action)
+		}
+	}
+}
+
+func resolveOneActionSchemas(ctx context.Context, c *Client, action map[string]any) {
 	for _, item := range []struct {
 		refKey string
 		outKey string
@@ -155,17 +182,17 @@ func resolveDescriptionSchemas(ctx context.Context, c *Client, description map[s
 		{refKey: "arguments_schema", outKey: "resolved_input_schema"},
 		{refKey: "result_schema", outKey: "resolved_output_schema"},
 	} {
-		ref, _ := metadata[item.refKey].(map[string]any)
+		ref, _ := action[item.refKey].(map[string]any)
 		contentURI, _ := ref["resource_id"].(string)
 		if contentURI == "" {
 			continue
 		}
 		content, err := c.readContent(ctx, contentURI)
 		if err != nil {
-			description[item.outKey+"_error"] = err.Error()
+			action[item.outKey+"_error"] = err.Error()
 			continue
 		}
-		description[item.outKey] = content
+		action[item.outKey] = content
 	}
 }
 

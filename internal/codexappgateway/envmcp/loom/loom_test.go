@@ -85,10 +85,54 @@ func TestDescribeResolvesActionSchemas(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &body); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := body["resolved_input_schema"]; !ok {
+	metadata := body["resource"].(map[string]any)["metadata"].(map[string]any)
+	if _, ok := metadata["resolved_input_schema"]; !ok {
 		t.Fatalf("resolved input schema missing: %s", result.Content[0].Text)
 	}
-	if _, ok := body["resolved_output_schema"]; !ok {
+	if _, ok := metadata["resolved_output_schema"]; !ok {
 		t.Fatalf("resolved output schema missing: %s", result.Content[0].Text)
+	}
+}
+
+func TestDescribeResolvesNestedActionSchemas(t *testing.T) {
+	const inputRef = "grip://loom.local/workspaces/workspace-default/content/nested-input"
+	const outputRef = "grip://loom.local/workspaces/workspace-default/content/nested-output"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		method, _ := req["method"].(string)
+		target, _ := req["target"].(string)
+		if method == "DESCRIBE" {
+			json.NewEncoder(w).Encode(map[string]any{"kind": "reply", "body": map[string]any{
+				"resource": map[string]any{"metadata": map[string]any{"actions": []any{
+					map[string]any{"name": "instances_run", "arguments_schema": map[string]any{"resource_id": inputRef}, "result_schema": map[string]any{"resource_id": outputRef}},
+				}}},
+			}})
+			return
+		}
+		content := map[string]any{"required": []string{"ProjectId"}}
+		if target == outputRef {
+			content = map[string]any{"required": []string{"Instances"}}
+		}
+		json.NewEncoder(w).Encode(map[string]any{"kind": "reply", "body": map[string]any{"content": content}})
+	}))
+	defer ts.Close()
+	result, err := (&describeTool{c: NewClient(ts.URL, "loom.local", "workspace-default", "token")}).Call(context.Background(), json.RawMessage(`{"target":"grip://loom.local/workspaces/workspace-default/packages/suanlicloud-http/v7"}`))
+	if err != nil || result.IsError {
+		t.Fatalf("describe failed: %v %+v", err, result)
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &body); err != nil {
+		t.Fatal(err)
+	}
+	actions := body["resource"].(map[string]any)["metadata"].(map[string]any)["actions"].([]any)
+	action := actions[0].(map[string]any)
+	if _, ok := action["resolved_input_schema"]; !ok {
+		t.Fatalf("nested input schema missing: %s", result.Content[0].Text)
+	}
+	if _, ok := action["resolved_output_schema"]; !ok {
+		t.Fatalf("nested output schema missing: %s", result.Content[0].Text)
 	}
 }
