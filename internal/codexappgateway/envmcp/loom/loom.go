@@ -36,6 +36,14 @@ func (c *Client) targetRoot() string {
 	return fmt.Sprintf("grip://%s/workspaces/%s", c.authority, c.workspace)
 }
 
+// requiresServiceToken identifies exported package actions. Loom's built-in
+// workspace actions (for example how-to-use, stop, and configure) are invoked
+// with the workspace token; the token exchange endpoint only issues scoped
+// credentials for exported service actions.
+func requiresServiceToken(action string) bool {
+	return strings.Contains(action, "/actions/exports/")
+}
+
 // serviceToken exchanges the workspace token for the scoped credential that
 // Loom requires when invoking an activation's service action. The workspace
 // token is intentionally sufficient for discovery and native workspace
@@ -80,7 +88,7 @@ func (c *Client) serviceToken(ctx context.Context, target, action string) (strin
 
 func (c *Client) call(ctx context.Context, method, target, action string, input any) (map[string]any, error) {
 	credential := c.token
-	if method == "INVOKE" && strings.Contains(target, "/activations/") {
+	if method == "INVOKE" && strings.Contains(target, "/activations/") && requiresServiceToken(action) {
 		var err error
 		credential, err = c.serviceToken(ctx, target, action)
 		if err != nil {
@@ -330,7 +338,7 @@ func (t *streamTool) Call(ctx context.Context, args json.RawMessage) (tools.MCPC
 		return errorResult(fmt.Errorf("stream binding not offered for action")), nil
 	}
 	credential := t.c.token
-	if strings.Contains(a.Target, "/activations/") {
+	if strings.Contains(a.Target, "/activations/") && requiresServiceToken(a.Action) {
 		credential, err = t.c.serviceToken(ctx, a.Target, a.Action)
 		if err != nil {
 			return errorResult(err), nil
