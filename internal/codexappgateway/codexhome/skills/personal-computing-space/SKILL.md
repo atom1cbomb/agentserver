@@ -20,6 +20,15 @@ Do not guess a resource URI, action URI, input field, dependency, provider, or l
 2. Call `loom_describe` for the selected resource or activation. For an action, use the returned `resolved_input_schema` and `resolved_output_schema` fields as the authoritative JSON Schemas; do not treat `input_schema` or `output_schema` URI strings as if they were schema contents.
 3. When the relationship, dependency, activation, authentication, or action semantics are unclear, find the exact built-in `how-to-use` action in the returned offers and call it with `loom_invoke` using `{}`. Loom returns the package `HOW_TO_USE.md` through `documentation`/`usage_markdown` when it is published.
 4. Check every `required` field in the resolved input schema and construct the complete input before invoking. Resolve IDs, regions, zones, images, activation references, tags, and client/idempotency tokens from Loom resources or the user; never invent them or silently omit them.
+   For provider fields such as `ProjectId`, a literal value like `default` is
+   never a valid substitute unless that exact value was returned by Loom or
+   explicitly supplied by the user. If the current package has no project
+   discovery action and the project identifier cannot be established from a
+   returned resource, stop and ask for it before a mutating action.
+   For `suanlicloud-http`, call the discovered `instances-list` read action
+   with `{}` when necessary; its returned instance objects include the real
+   `ProjectId`. Reuse that exact identifier for `zones-list`, `images-list`,
+   and `instances-run`, and do not replace it with `default`.
 5. For a named service, use the discovered `check-package`, `activate-package`, `auth-start`, and lifecycle actions. Wait for the declared ready/authenticated state, then DESCRIBE the same activation again before business calls.
 6. Choose direct execution for simple reads and exploration when the action advertises it. Choose a complete Driver plan for durable work, scheduling, recovery, or multiple dependent nodes. Save returned Run/Plan/submission references and poll the same returned URI.
 7. Do not retry an uncertain direct call unless the action's idempotency contract permits it. A GRIP request ID is not a business idempotency key.

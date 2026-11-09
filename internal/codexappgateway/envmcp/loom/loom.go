@@ -36,13 +36,67 @@ func (c *Client) targetRoot() string {
 	return fmt.Sprintf("grip://%s/workspaces/%s", c.authority, c.workspace)
 }
 
+// serviceToken exchanges the workspace token for the scoped credential that
+// Loom requires when invoking an activation's service action. The workspace
+// token is intentionally sufficient for discovery and native workspace
+// actions, but Observer rejects it for package service actions.
+func (c *Client) serviceToken(ctx context.Context, target, action string) (string, error) {
+	d, err := c.callWithCredential(ctx, "DESCRIBE", target, "", nil, c.token)
+	if err != nil {
+		return "", err
+	}
+	resource, _ := d["resource"].(map[string]any)
+	metadata, _ := resource["metadata"].(map[string]any)
+	revision, ok := metadata["revision"].(float64)
+	if !ok || revision < 1 {
+		return "", fmt.Errorf("Loom activation description has no revision")
+	}
+	payload := map[string]any{"target": target, "action": action,
+		"audience": c.targetRoot(), "expected_activation_revision": int(revision)}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/auth/token", bytes.NewReader(raw))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("loom token request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("loom token request status %d", resp.StatusCode)
+	}
+	var result struct{ AccessToken string `json:"access_token"` }
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil || result.AccessToken == "" {
+		return "", fmt.Errorf("loom token response invalid")
+	}
+	return result.AccessToken, nil
+}
+
 func (c *Client) call(ctx context.Context, method, target, action string, input any) (map[string]any, error) {
+	credential := c.token
+	if method == "INVOKE" && strings.Contains(target, "/activations/") {
+		var err error
+		credential, err = c.serviceToken(ctx, target, action)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return c.callWithCredential(ctx, method, target, action, input, credential)
+}
+
+func (c *Client) callWithCredential(ctx context.Context, method, target, action string, input any, credential string) (map[string]any, error) {
 	if c.baseURL == "" || c.authority == "" || c.workspace == "" || c.token == "" {
 		return nil, fmt.Errorf("loom is not configured")
 	}
 	c.seq.Add(1)
 	body := map[string]any{"version": "grip.v1", "request_id": fmt.Sprintf("agentserver-loom-%d", c.seq.Load()), "method": method,
-		"auth": map[string]any{"scheme": "bearer", "credential": c.token}, "target": target,
+		"auth": map[string]any{"scheme": "bearer", "credential": credential}, "target": target,
 		"accepted_protocols": []string{"loom-http-json.v1"}}
 	if method == "INVOKE" {
 		body["action"] = action
@@ -275,7 +329,14 @@ func (t *streamTool) Call(ctx context.Context, args json.RawMessage) (tools.MCPC
 	if endpoint == "" {
 		return errorResult(fmt.Errorf("stream binding not offered for action")), nil
 	}
-	request := map[string]any{"version": "grip.v1", "request_id": fmt.Sprintf("agentserver-loom-%d", t.c.seq.Add(1)), "method": "INVOKE", "auth": map[string]any{"scheme": "bearer", "credential": t.c.token}, "target": a.Target, "action": a.Action, "input": a.Input, "accepted_protocols": []string{"loom-wss-stream.v1"}}
+	credential := t.c.token
+	if strings.Contains(a.Target, "/activations/") {
+		credential, err = t.c.serviceToken(ctx, a.Target, a.Action)
+		if err != nil {
+			return errorResult(err), nil
+		}
+	}
+	request := map[string]any{"version": "grip.v1", "request_id": fmt.Sprintf("agentserver-loom-%d", t.c.seq.Add(1)), "method": "INVOKE", "auth": map[string]any{"scheme": "bearer", "credential": credential}, "target": a.Target, "action": a.Action, "input": a.Input, "accepted_protocols": []string{"loom-wss-stream.v1"}}
 	conn, _, err := websocket.Dial(ctx, endpoint, &websocket.DialOptions{Subprotocols: []string{"loom-wss-stream.v1"}, CompressionMode: websocket.CompressionDisabled})
 	if err != nil {
 		return errorResult(err), nil
