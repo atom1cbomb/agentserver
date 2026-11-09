@@ -97,7 +97,10 @@ func (m *Manager) NewTmpDir(workspaceID string) (string, error) {
 // InstallLoomSkill installs the embedded, read-only AgentServer-adapted Loom
 // skill into the Codex-compatible global skill root for this CODEX_HOME.
 func (m *Manager) InstallLoomSkill(codexHome string) error {
-	root := filepath.Join(codexHome, ".agents", "skills", "personal-computing-space")
+	// CODEX_HOME/skills is Codex's global skill root. `.agents/skills` is
+	// discovered relative to the working directory and is therefore not
+	// visible when the app-server runs with a separate temporary CODEX_HOME.
+	root := filepath.Join(codexHome, "skills", "personal-computing-space")
 	return fsCopy(loomSkillFS, "skills/personal-computing-space", root)
 }
 

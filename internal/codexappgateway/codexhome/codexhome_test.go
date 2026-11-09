@@ -27,7 +27,7 @@ func TestManager_NewTmpDir_LayoutAndPermissions(t *testing.T) {
 	if st.Mode().Perm() != 0o700 {
 		t.Errorf("perm = %v", st.Mode().Perm())
 	}
-	skill := filepath.Join(d, ".agents", "skills", "personal-computing-space", "SKILL.md")
+	skill := filepath.Join(d, "skills", "personal-computing-space", "SKILL.md")
 	if _, err := os.Stat(skill); err != nil {
 		t.Fatalf("embedded Loom skill missing: %v", err)
 	}
